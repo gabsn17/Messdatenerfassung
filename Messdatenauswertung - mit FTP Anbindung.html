@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Messdaten Visualisierung</title>
+    
+    <!-- Tailwind CSS für das Design -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React & ReactDOM (UMD Versionen für den Browser) -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- React-is (wird zwingend von Recharts im Browser benötigt) -->
+    <script crossorigin src="https://unpkg.com/react-is@18/umd/react-is.production.min.js"></script>
+    
+    <!-- Babel, um den JSX-Code im Browser auszuführen -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Prop-Types (wird von Recharts benötigt) -->
+    <script src="https://unpkg.com/prop-types/prop-types.min.js"></script>
+    
+    <!-- Recharts für die Diagramme -->
+    <script src="https://unpkg.com/recharts@2.1.12/umd/Recharts.js"></script>
+</head>
+<body class="bg-gray-50">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useMemo, useEffect, useCallback } = React;
+        const { 
+            RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, 
+            LineChart, Line, XAxis, YAxis, CartesianGrid, ReferenceLine, 
+            Tooltip, Legend, ResponsiveContainer 
+        } = window.Recharts;
+
+        // SVG Icons
+        const ActivityIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        );
+        const RefreshCwIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+        );
+        const AlertCircleIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        );
+        const UploadIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        );
+        const FileSpreadsheetIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M8 13h2"/><path d="M8 17h2"/><path d="M14 13h2"/><path d="M14 17h2"/></svg>
+        );
+        const FolderIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>
+        );
+        const InfoIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+        );
+        const SettingsIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+        );
+        const FileTextIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+        );
+        const FilterIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+        );
+        const ChevronLeftIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+        );
+        const ChevronRightIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+        );
+        const RepeatIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="17 1 21 5 17 9"></polyline><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><polyline points="7 23 3 19 7 15"></polyline><path d="M21 13v2a4 4 0 0 1-4 4H3"></path></svg>
+        );
+        const MaximizeIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+        );
+        const RefreshIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.59-10.45l5.25 4.88"/></svg>
+        );
+
+        const App = () => {
+            const [data, setData] = useState([]);
+            const [componentMeta, setComponentMeta] = useState([]); 
+            const [selectedComponentKey, setSelectedComponentKey] = useState('');
+            const [compareComponentKey, setCompareComponentKey] = useState(''); 
+            const [fileName, setFileName] = useState('');
+            const [error, setError] = useState('');
+            const [headerCol5, setHeaderCol5] = useState('Spalte 5');
+            
+            // Speichern des Verzeichnis-Handles für Auto-Update der neuesten Datei
+            const [dirHandle, setDirHandle] = useState(null);
+            const [isUpdating, setIsUpdating] = useState(false);
+            
+            // Sicherer Check, ob wir uns in einem iFrame befinden (verhindert SecurityError)
+            const isIframe = window !== window.parent;
+            
+            // Filter-States
+            const [selectedStation, setSelectedStation] = useState('Alle');
+            const [selectedMessmodus, setSelectedMessmodus] = useState('Alle');
+
+            // Toleranz-Status
+            const [upperTolerance, setUpperTolerance] = useState('');
+            const [lowerTolerance, setLowerTolerance] = useState('');
+
+            // Manuelle Netzdiagramm-Skalierung
+            const [radarManualMax, setRadarManualMax] = useState('');
+            const [radarManualMin, setRadarManualMin] = useState('');
+
+            // Sichtbarkeit der einzelnen Kurven
+            const [visibleLines, setVisibleLines] = useState({
+                m1: false, m2: false, m3: false,
+                e1: false, e2: false, e3: false,
+                dRoh: false, n1: false, n2: false, n3: false
+            });
+
+            // Standard-Sichtbarkeit basierend auf Werten > 0 (gilt nur für das Hauptbauteil)
+            useEffect(() => {
+                if (!selectedComponentKey || data.length === 0) return;
+                const currentData = data.filter(item => item.mapKey === selectedComponentKey);
+                const hasPositiveValues = (key) => currentData.some(d => d[key] !== null && d[key] > 0);
+                
+                setVisibleLines({
+                    m1: hasPositiveValues('m1'),
+                    m2: hasPositiveValues('m2'),
+                    m3: hasPositiveValues('m3'),
+                    e1: hasPositiveValues('e1'),
+                    e2: hasPositiveValues('e2'),
+                    e3: hasPositiveValues('e3'),
+                    dRoh: false,
+                    n1: false,
+                    n2: false,
+                    n3: false
+                });
+            }, [selectedComponentKey, data]);
+
+            const parseValue = (val) => {
+                if (!val || val.trim() === '' || val.trim() === '-') return null;
+                const parsed = parseFloat(val.replace(',', '.'));
+                return isNaN(parsed) ? null : parsed;
+            };
+
+            // Kernfunktion zum Parsen der Arrays an Files
+            const processFiles = async (files) => {
+                let tempData = [];
+                let metaMap = new Map();
+                let col5Title = 'Info';
+
+                const readPromises = files.map(file => {
+                    return new Promise((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onload = (e) => {
+                            try {
+                                const text = e.target.result;
+                                const lines = text.split(/\r?\n/);
+                                if (lines.length < 2) return resolve();
+
+                                const headers = lines[0].split(';');
+                                if (headers[4]) col5Title = headers[4].trim();
+
+                                let idxStation = headers.findIndex(h => h.toLowerCase().includes('station'));
+                                let idxBauteil = headers.findIndex(h => h.toLowerCase().includes('bauteil_nr'));
+                                let idxWinkel = headers.findIndex(h => h.toLowerCase() === 'winkel' || h.toLowerCase() === 'winkel_1');
+                                let idxM1 = headers.findIndex(h => h.includes('D_M1'));
+                                let idxM2 = headers.findIndex(h => h.includes('D_M2'));
+                                let idxM3 = headers.findIndex(h => h.includes('D_M3'));
+                                let idxE1 = headers.findIndex(h => h.includes('Ebenheit_M1') || h.toLowerCase() === 'ebenheit');
+                                let idxE2 = headers.findIndex(h => h.includes('Ebenheit_M2'));
+                                let idxE3 = headers.findIndex(h => h.includes('Ebenheit_M3'));
+                                
+                                let idxDRoh = headers.findIndex(h => h.includes('D_Rohdaten'));
+                                let idxN1 = headers.findIndex(h => h.includes('Nocke_M1'));
+                                let idxN2 = headers.findIndex(h => h.includes('Nocke_M2'));
+                                let idxN3 = headers.findIndex(h => h.includes('Nocke_M3'));
+
+                                // Fallbacks
+                                if (idxStation === -1) idxStation = 0;
+                                if (idxBauteil === -1) idxBauteil = 2;
+                                if (idxWinkel === -1) idxWinkel = 8; 
+                                if (idxM1 === -1) idxM1 = 10; 
+                                if (idxM2 === -1) idxM2 = 11;
+                                if (idxM3 === -1) idxM3 = 12;
+
+                                for (let i = 1; i < lines.length; i++) {
+                                    if (!lines[i].trim()) continue;
+                                    const cols = lines[i].split(';');
+                                    if (cols.length < 5) continue;
+
+                                    const bauteil = cols[idxBauteil]?.trim() || 'Unbekannt';
+                                    const rawWinkel = parseValue(cols[idxWinkel]);
+
+                                    if (bauteil && rawWinkel !== null) {
+                                        const cleanBauteil = bauteil.replace(/^[+-]/, '');
+                                        const stationVal = cols[idxStation] ? cols[idxStation].trim() : 'Unbekannt';
+                                        const col5Val = cols[4] ? cols[4].trim() : '';
+
+                                        const mapKey = `${stationVal}_${cleanBauteil}`;
+
+                                        if (!metaMap.has(mapKey)) {
+                                            metaMap.set(mapKey, { key: mapKey, bauteil: cleanBauteil, station: stationVal, col5: col5Val });
+                                        }
+
+                                        tempData.push({
+                                            mapKey: mapKey,
+                                            station: stationVal,
+                                            bauteil: cleanBauteil,
+                                            rawWinkel: rawWinkel,
+                                            col5: col5Val,
+                                            m1: parseValue(cols[idxM1]),
+                                            m2: parseValue(cols[idxM2]),
+                                            m3: parseValue(cols[idxM3]),
+                                            e1: parseValue(cols[idxE1]),
+                                            e2: idxE2 !== -1 ? parseValue(cols[idxE2]) : null,
+                                            e3: idxE3 !== -1 ? parseValue(cols[idxE3]) : null,
+                                            dRoh: idxDRoh !== -1 ? parseValue(cols[idxDRoh]) : null,
+                                            n1: idxN1 !== -1 ? parseValue(cols[idxN1]) : null,
+                                            n2: idxN2 !== -1 ? parseValue(cols[idxN2]) : null,
+                                            n3: idxN3 !== -1 ? parseValue(cols[idxN3]) : null,
+                                        });
+                                    }
+                                }
+                                resolve();
+                            } catch (e) {
+                                reject(e);
+                            }
+                        };
+                        reader.readAsText(file);
+                    });
+                });
+
+                await Promise.all(readPromises);
+
+                setHeaderCol5(col5Title);
+
+                const metaArray = Array.from(metaMap.values()).sort((a, b) => {
+                    const diff = parseInt(a.bauteil) - parseInt(b.bauteil);
+                    if (diff !== 0) return diff;
+                    return a.station.localeCompare(b.station); 
+                });
+                
+                const parsedData = [];
+
+                metaArray.forEach(meta => {
+                    const compData = tempData.filter(d => d.mapKey === meta.key);
+                    const validRows = compData.filter(d => 
+                        (d.m1 && d.m1 !== 0) || (d.m2 && d.m2 !== 0) || (d.m3 && d.m3 !== 0) ||
+                        (d.e1 && d.e1 !== 0) || (d.e2 && d.e2 !== 0) || (d.e3 && d.e3 !== 0) ||
+                        (d.dRoh && d.dRoh !== 0)
+                    );
+                    
+                    const is10DegreeMode = validRows.length > 0 && validRows.length <= 36;
+
+                    validRows.forEach(d => {
+                        parsedData.push({
+                            ...d,
+                            winkel: is10DegreeMode ? d.rawWinkel * 10 : d.rawWinkel,
+                            m1: d.m1 === 0 ? null : d.m1,
+                            m2: d.m2 === 0 ? null : d.m2,
+                            m3: d.m3 === 0 ? null : d.m3,
+                            dRoh: d.dRoh === 0 ? null : d.dRoh,
+                            modus: is10DegreeMode ? '10-Grad Schritte' : '1-Grad Schritte'
+                        });
+                    });
+                });
+
+                setData(parsedData);
+                setComponentMeta(metaArray);
+            };
+
+            // Funktion, die den Ordner durchsucht und automatisch die aktuellsten MAS1 und MAS2 Dateien lädt
+            const loadLatestFilesFromDir = async (handle) => {
+                setIsUpdating(true);
+                setError('');
+                try {
+                    const mas1Files = [];
+                    const mas2Files = [];
+                    
+                    // Ordner iterieren und nach passenden CSVs suchen
+                    for await (const entry of handle.values()) {
+                        if (entry.kind === 'file' && entry.name.toLowerCase().endsWith('.csv')) {
+                            const upperName = entry.name.toUpperCase();
+                            if (upperName.startsWith('MAS1')) mas1Files.push(entry);
+                            if (upperName.startsWith('MAS2')) mas2Files.push(entry);
+                        }
+                    }
+
+                    // Sortieren nach Name absteigend (YYYY_MM_DD im Namen garantiert, dass die neuste oben ist)
+                    mas1Files.sort((a, b) => b.name.localeCompare(a.name));
+                    mas2Files.sort((a, b) => b.name.localeCompare(a.name));
+
+                    const filesToLoad = [];
+                    if (mas1Files.length > 0) filesToLoad.push(await mas1Files[0].getFile());
+                    if (mas2Files.length > 0) filesToLoad.push(await mas2Files[0].getFile());
+
+                    if (filesToLoad.length === 0) {
+                        setError('Keine passenden MAS1 oder MAS2 Dateien in diesem Ordner gefunden.');
+                        return;
+                    }
+
+                    setFileName(filesToLoad.map(f => f.name).join(', '));
+                    
+                    // Aktuelles Bauteil merken, um es ggf. nach dem Neuladen aktiv zu halten
+                    const currentSelected = selectedComponentKey;
+                    
+                    await processFiles(filesToLoad);
+                    
+                    if (currentSelected) {
+                         setTimeout(() => setSelectedComponentKey(currentSelected), 100);
+                    }
+                } catch (err) {
+                    setError('Fehler beim Lesen des Ordners. Möglicherweise fehlen Berechtigungen.');
+                    console.error(err);
+                } finally {
+                    setIsUpdating(false);
+                }
+            };
+
+            // Neue Ordner-Auswahl (für das automatische Datum-Update)
+            const handleDirectoryPicker = async () => {
+                if (isIframe || !('showDirectoryPicker' in window)) return;
+                
+                try {
+                    const handle = await window.showDirectoryPicker();
+                    setDirHandle(handle);
+                    await loadLatestFilesFromDir(handle);
+                    
+                    setSelectedStation('Alle');
+                    setSelectedMessmodus('Alle');
+                    setCompareComponentKey(''); 
+                } catch (err) {
+                    if (err.name !== 'AbortError') {
+                        setError('Fehler beim Zugriff auf den Ordner.');
+                        console.error(err);
+                    }
+                }
+            };
+
+            // Fallback: Klassischer manueller Upload (ohne Ordner-Automatik)
+            const triggerFileInput = () => {
+                document.getElementById('fileUploadInput').click();
+            };
+
+            const handleFallbackUpload = async (event) => {
+                const files = Array.from(event.target.files);
+                if (files.length === 0) return;
+                
+                setDirHandle(null); // Da manueller File-Upload, Ordner zurücksetzen
+                setFileName(files.map(f => f.name).join(', '));
+                setError('');
+                
+                try {
+                    await processFiles(files);
+                    setSelectedStation('Alle');
+                    setSelectedMessmodus('Alle');
+                    setCompareComponentKey(''); 
+                } catch (err) {
+                    setError('Fehler beim Lesen der Dateien.');
+                    console.error(err);
+                }
+            };
+
+            // Funktion zum Aktualisieren über den Ordner
+            const handleRefreshData = async () => {
+                if (!dirHandle) return;
+                
+                try {
+                    // Prüfe, ob wir noch Leserechte auf den Ordner haben, andernfalls anfragen
+                    const options = { mode: 'read' };
+                    if ((await dirHandle.queryPermission(options)) !== 'granted') {
+                        const permission = await dirHandle.requestPermission(options);
+                        if (permission !== 'granted') throw new Error("Leseberechtigung verweigert.");
+                    }
+                    await loadLatestFilesFromDir(dirHandle);
+                } catch (err) {
+                    setError('Berechtigung verloren oder Fehler beim Ordner-Update.');
+                }
+            };
+
+            const resetData = () => {
+                setData([]); setComponentMeta([]); setSelectedComponentKey(''); setCompareComponentKey(''); setFileName(''); setDirHandle(null);
+            };
+
+            const toggleLine = (line) => setVisibleLines(prev => ({ ...prev, [line]: !prev[line] }));
+
+            // --- Filter-Logik ---
+            const availableStations = useMemo(() => {
+                return ['Alle', ...new Set(componentMeta.map(c => c.station).filter(Boolean))];
+            }, [componentMeta]);
+
+            const availableMessmodi = useMemo(() => {
+                return ['Alle', ...new Set(componentMeta.map(c => c.col5))];
+            }, [componentMeta]);
+
+            const filteredComponentsKeys = useMemo(() => {
+                return componentMeta.filter(c => {
+                    const matchStation = selectedStation === 'Alle' || c.station === selectedStation;
+                    const matchModus = selectedMessmodus === 'Alle' || c.col5 === selectedMessmodus;
+                    return matchStation && matchModus;
+                }).map(c => c.key);
+            }, [componentMeta, selectedStation, selectedMessmodus]);
+
+            // Auto-Select erstes Element, wenn sich Filter ändern
+            useEffect(() => {
+                if (filteredComponentsKeys.length > 0 && !filteredComponentsKeys.includes(selectedComponentKey)) {
+                    setSelectedComponentKey(filteredComponentsKeys[0]);
+                } else if (filteredComponentsKeys.length === 0) {
+                    setSelectedComponentKey('');
+                }
+                
+                if (compareComponentKey && !filteredComponentsKeys.includes(compareComponentKey)) {
+                    setCompareComponentKey('');
+                }
+            }, [filteredComponentsKeys, selectedComponentKey, compareComponentKey]);
+
+            const currentIndex = filteredComponentsKeys.indexOf(selectedComponentKey);
+            
+            const handlePrev = () => {
+                if (currentIndex > 0) setSelectedComponentKey(filteredComponentsKeys[currentIndex - 1]);
+            };
+            
+            const handleNext = () => {
+                if (currentIndex < filteredComponentsKeys.length - 1) setSelectedComponentKey(filteredComponentsKeys[currentIndex + 1]);
+            };
+
+            // --- Chart & Stat Daten ---
+            const chartData = useMemo(() => {
+                if (!selectedComponentKey || data.length === 0) return [];
+                
+                const mainData = data.filter(item => item.mapKey === selectedComponentKey);
+                const compData = compareComponentKey ? data.filter(item => item.mapKey === compareComponentKey) : [];
+                
+                const merged = [];
+                const allAngles = new Set([...mainData.map(d=>d.winkel), ...compData.map(d=>d.winkel)]);
+                
+                // Toleranzen vorbereiten
+                const upTol = upperTolerance !== '' && !isNaN(parseFloat(upperTolerance)) ? parseFloat(upperTolerance) : null;
+                const lowTol = lowerTolerance !== '' && !isNaN(parseFloat(lowerTolerance)) ? parseFloat(lowerTolerance) : null;
+
+                // Um perfekte Kreise für die Toleranzen im RadarChart zu garantieren,
+                // füllen wir künstlich alle 360 Grade auf, falls Toleranzen gezeichnet werden sollen.
+                if (upTol !== null || lowTol !== null) {
+                    for (let i = 0; i < 360; i++) {
+                        allAngles.add(i);
+                    }
+                }
+
+                const sortedAngles = Array.from(allAngles).sort((a,b)=>a-b);
+
+                sortedAngles.forEach(w => {
+                    const mPoint = mainData.find(d => d.winkel === w) || {};
+                    const cPoint = compData.find(d => d.winkel === w) || {};
+                    
+                    merged.push({
+                        winkel: w,
+                        upperTol: upTol,
+                        lowerTol: lowTol,
+                        m1: mPoint.m1 !== undefined ? mPoint.m1 : null, 
+                        m2: mPoint.m2 !== undefined ? mPoint.m2 : null, 
+                        m3: mPoint.m3 !== undefined ? mPoint.m3 : null,
+                        e1: mPoint.e1 !== undefined ? mPoint.e1 : null, 
+                        e2: mPoint.e2 !== undefined ? mPoint.e2 : null, 
+                        e3: mPoint.e3 !== undefined ? mPoint.e3 : null,
+                        dRoh: mPoint.dRoh !== undefined ? mPoint.dRoh : null, 
+                        n1: mPoint.n1 !== undefined ? mPoint.n1 : null, 
+                        n2: mPoint.n2 !== undefined ? mPoint.n2 : null, 
+                        n3: mPoint.n3 !== undefined ? mPoint.n3 : null,
+                        modus: mPoint.modus || cPoint.modus,
+                        m1C: cPoint.m1 !== undefined ? cPoint.m1 : null, 
+                        m2C: cPoint.m2 !== undefined ? cPoint.m2 : null, 
+                        m3C: cPoint.m3 !== undefined ? cPoint.m3 : null,
+                        e1C: cPoint.e1 !== undefined ? cPoint.e1 : null, 
+                        e2C: cPoint.e2 !== undefined ? cPoint.e2 : null, 
+                        e3C: cPoint.e3 !== undefined ? cPoint.e3 : null,
+                        dRohC: cPoint.dRoh !== undefined ? cPoint.dRoh : null, 
+                        n1C: cPoint.n1 !== undefined ? cPoint.n1 : null, 
+                        n2C: cPoint.n2 !== undefined ? cPoint.n2 : null, 
+                        n3C: cPoint.n3 !== undefined ? cPoint.n3 : null,
+                    });
+                });
+                
+                return merged;
+            }, [data, selectedComponentKey, compareComponentKey, upperTolerance, lowerTolerance]);
+
+            // Stats berechnen
+            const stats = useMemo(() => {
+                if (chartData.length === 0) return null;
+                const calcStat = (key) => {
+                    const values = chartData.map(d => d[key]).filter(v => v !== null && v !== undefined && !isNaN(v));
+                    if (values.length === 0) return null;
+                    const min = Math.min(...values), max = Math.max(...values);
+                    return { min, max, delta: max - min };
+                };
+                
+                const mainMeta = componentMeta.find(m => m.key === selectedComponentKey);
+                
+                return {
+                    m1: calcStat('m1'), m2: calcStat('m2'), m3: calcStat('m3'),
+                    e1: calcStat('e1'), e2: calcStat('e2'), e3: calcStat('e3'),
+                    dRoh: calcStat('dRoh'),
+                    station: mainMeta ? mainMeta.station : 'Unbekannt'
+                };
+            }, [chartData, componentMeta, selectedComponentKey]);
+
+            const tooltipFormatter = (value, name) => {
+                if (value === null || value === undefined || isNaN(value)) return ['-', name];
+                
+                let displayName = name;
+                if (name === 'upperTol') displayName = 'Max Tol.';
+                if (name === 'lowerTol') displayName = 'Min Tol.';
+                if (name.endsWith('C')) displayName = name.slice(0, -1) + ' (Vgl.)';
+                if (displayName.includes('Nocke')) return [value.toFixed(0), displayName];
+                
+                return [`${Number(value).toFixed(3)} mm`, displayName]; 
+            };
+
+            const radarAxisDomain = useMemo(() => [
+                (dataMin) => {
+                    if (radarManualMin !== '' && !isNaN(parseFloat(radarManualMin))) {
+                        return parseFloat(radarManualMin);
+                    }
+                    const lTol = parseFloat(lowerTolerance);
+                    // Bestimme den kleinsten Wert aus Daten oder unterer Toleranzgrenze
+                    const min = (!isNaN(lTol) && lTol < dataMin) ? lTol : dataMin;
+                    if (!isFinite(min)) return 0;
+                    // Skalierung startet beim halben Wert des kleinsten Wertes
+                    return Math.max(0, min / 2); 
+                },
+                (dataMax) => {
+                    if (radarManualMax !== '' && !isNaN(parseFloat(radarManualMax))) {
+                        return parseFloat(radarManualMax);
+                    }
+                    const uTol = parseFloat(upperTolerance);
+                    const max = (!isNaN(uTol) && uTol > dataMax) ? uTol : dataMax;
+                    if (!isFinite(max)) return 10;
+                    return max + (max * 0.005); // Dynamische Max-Anpassung mit 0.5% Puffer nach oben
+                }
+            ], [upperTolerance, lowerTolerance, radarManualMin, radarManualMax]);
+
+            return (
+                <div className="min-h-screen text-slate-800 p-6 font-sans">
+                <div className="max-w-[1600px] mx-auto space-y-6">
+                    <header className="flex items-center justify-between bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                        <div className="flex items-center gap-3">
+                            <div className="p-3 bg-blue-100 text-blue-600 rounded-lg"><ActivityIcon /></div>
+                            <div>
+                                <h1 className="text-2xl font-bold text-gray-900">Rundlauf & Ebenheits-Analyse</h1>
+                                <p className="text-sm text-gray-500">Visualisierung von Messdaten aus CSV</p>
+                            </div>
+                        </div>
+                        {data.length > 0 && (
+                            <div className="flex items-center gap-3">
+                                {/* Neuer Aktualisieren-Button (Nur sichtbar, wenn Ordner-Handle existiert) */}
+                                {dirHandle && (
+                                    <button 
+                                        onClick={handleRefreshData} 
+                                        disabled={isUpdating}
+                                        className="flex items-center gap-2 text-sm font-medium bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800 px-4 py-2 rounded-lg transition-colors border border-emerald-200 shadow-sm disabled:opacity-50"
+                                    >
+                                        <RefreshIcon className={isUpdating ? "animate-spin" : ""} />
+                                        {isUpdating ? 'Lade Ordner neu...' : 'Aktualisieren'}
+                                    </button>
+                                )}
+                                
+                                <button onClick={resetData} className="flex items-center gap-2 text-sm text-gray-600 hover:text-red-600 px-4 py-2 rounded-lg hover:bg-red-50 transition-colors">
+                                    <RefreshCwIcon /> Neue Datei laden
+                                </button>
+                            </div>
+                        )}
+                    </header>
+
+                    {error && (
+                        <div className="bg-red-50 text-red-700 p-4 rounded-lg flex items-center gap-3 border border-red-200">
+                            <AlertCircleIcon />
+                            <p>{error}</p>
+                        </div>
+                    )}
+
+                    {data.length === 0 ? (
+                        <div className="bg-white p-12 rounded-xl shadow-sm border border-gray-100 text-center flex flex-col items-center justify-center min-h-[400px]">
+                            <div className="w-20 h-20 bg-blue-50 text-blue-500 rounded-full flex items-center justify-center mb-6"><UploadIcon /></div>
+                            <h2 className="text-xl font-semibold mb-2">Datenquelle wählen</h2>
+                            <p className="text-gray-500 max-w-md mx-auto mb-8">
+                                Wähle entweder den gesamten FTP-Ordner aus (empfohlen für automatische Datum-Updates) oder wähle einzelne Dateien manuell aus.
+                            </p>
+                            
+                            <div className="flex gap-4 justify-center">
+                                {/* Moderne Ordner-Auswahl - Wird in iFrames verborgen um SecurityError zu vermeiden */}
+                                {!isIframe && ('showDirectoryPicker' in window) && (
+                                    <button 
+                                        onClick={handleDirectoryPicker}
+                                        className="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2 shadow-sm"
+                                    >
+                                        <FolderIcon /> Ordner auswählen (Auto-Update)
+                                    </button>
+                                )}
+                                
+                                <input id="fileUploadInput" type="file" accept=".csv, .txt" multiple className="hidden" onChange={handleFallbackUpload} />
+                                <button 
+                                    onClick={triggerFileInput}
+                                    className={`cursor-pointer px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2 shadow-sm ${!isIframe && ('showDirectoryPicker' in window) ? 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50' : 'bg-blue-600 hover:bg-blue-700 text-white'}`}
+                                >
+                                    <FileSpreadsheetIcon /> Dateien manuell auswählen
+                                </button>
+                            </div>
+                            {isIframe && (
+                                <p className="text-xs text-orange-500 mt-4 max-w-sm">
+                                    Tipp: Speichere diese Datei lokal und öffne sie direkt im Chrome/Edge Browser, um die fortgeschrittene "Ordner-Überwachung" für automatische Aktualisierungen freizuschalten!
+                                </p>
+                            )}
+                        </div>
+                    ) : (
+                        <div className="space-y-6">
+                            
+                            <div className="grid grid-cols-1 lg:grid-cols-6 gap-4">
+                                
+                                {/* 1. Filter Bereich */}
+                                <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 lg:col-span-1 flex flex-col">
+                                    <label className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2"><FilterIcon /> Filter</label>
+                                    <div className="space-y-3">
+                                        <div>
+                                            <span className="text-xs text-gray-500 block mb-1">Station</span>
+                                            <select className="w-full bg-gray-50 border border-gray-200 text-gray-900 text-sm rounded-lg p-2 focus:ring-blue-500 focus:border-blue-500" value={selectedStation} onChange={(e) => setSelectedStation(e.target.value)}>
+                                                {availableStations.map(s => <option key={s} value={s}>{s}</option>)}
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <span className="text-xs text-gray-500 block mb-1">{headerCol5}</span>
+                                            <select className="w-full bg-gray-50 border border-gray-200 text-gray-900 text-sm rounded-lg p-2 focus:ring-blue-500 focus:border-blue-500" value={selectedMessmodus} onChange={(e) => setSelectedMessmodus(e.target.value)}>
+                                                {availableMessmodi.map(m => <option key={m} value={m}>{m === '' ? '-' : m}</option>)}
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* 2. Bauteil Auswahl und Navigation */}
+                                <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 lg:col-span-2 flex flex-col justify-between">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">Ausgewähltes Bauteil</label>
+                                        <div className="flex items-center gap-2 mb-3">
+                                            <button onClick={handlePrev} disabled={currentIndex <= 0} className="p-2 bg-gray-50 border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-200 disabled:opacity-40 transition-colors">
+                                                <ChevronLeftIcon />
+                                            </button>
+                                            <select className="flex-1 min-w-0 bg-gray-50 border border-blue-300 text-gray-900 text-sm rounded-lg p-2.5 focus:ring-blue-500 focus:border-blue-500 font-medium" value={selectedComponentKey} onChange={(e) => setSelectedComponentKey(e.target.value)}>
+                                                {filteredComponentsKeys.length === 0 && <option value="">Keine Treffer</option>}
+                                                {filteredComponentsKeys.map(c => {
+                                                    const meta = componentMeta.find(m => m.key === c);
+                                                    return <option key={c} value={c}>Bauteil Nr. {meta.bauteil} ({meta.station})</option>
+                                                })}
+                                            </select>
+                                            <button onClick={handleNext} disabled={currentIndex === -1 || currentIndex >= filteredComponentsKeys.length - 1} className="p-2 bg-gray-50 border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-200 disabled:opacity-40 transition-colors">
+                                                <ChevronRightIcon />
+                                            </button>
+                                        </div>
+
+                                        <label className="block text-xs font-medium text-gray-500 mb-1 mt-2 flex items-center gap-1"><RepeatIcon /> Bauteil zum Vergleich (optional)</label>
+                                        <select className="w-full bg-gray-50 border border-gray-200 text-gray-700 text-sm rounded-lg p-2 focus:ring-blue-500 focus:border-blue-500" value={compareComponentKey} onChange={(e) => setCompareComponentKey(e.target.value)}>
+                                            <option value="">-- Kein Vergleich --</option>
+                                            {filteredComponentsKeys.filter(c => c !== selectedComponentKey).map(c => {
+                                                const meta = componentMeta.find(m => m.key === c);
+                                                return <option key={c} value={c}>Bauteil Nr. {meta.bauteil} ({meta.station})</option>
+                                            })}
+                                        </select>
+                                    </div>
+                                    
+                                    <div className="flex flex-col gap-2 text-xs text-gray-500 border-t pt-3 border-gray-100 mt-4">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2"><InfoIcon /> Station:</div>
+                                            <strong className="text-gray-900">{chartData.length > 0 ? stats?.station : '-'}</strong>
+                                        </div>
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2"><SettingsIcon /> Auflösung:</div>
+                                            <strong className="text-blue-600 bg-blue-50 px-2 py-0.5 rounded">{chartData.length > 0 ? chartData[0]?.modus : '-'}</strong>
+                                        </div>
+                                        <div className="flex items-center justify-between mt-1 p-2 bg-slate-50 rounded-md border border-slate-100">
+                                            <div className="flex items-center gap-2 text-slate-600 font-medium">
+                                                <FileTextIcon /> {headerCol5}:
+                                            </div>
+                                            <strong className="text-emerald-600">{chartData.length > 0 ? (chartData[0]?.col5 || '-') : '-'}</strong>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* 3. Achsen & Toleranzen Eingabe */}
+                                <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 lg:col-span-1 flex flex-col justify-between">
+                                    <div className="mb-3">
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Toleranzen (D_M)</label>
+                                        <div className="flex gap-2">
+                                            <div className="w-1/2">
+                                                <span className="text-[10px] text-gray-500">Max Tol.</span>
+                                                <input type="number" step="any" className="w-full mt-0.5 bg-gray-50 border border-gray-200 rounded p-1.5 text-sm focus:ring-blue-500 focus:border-blue-500" placeholder="Auto" value={upperTolerance} onChange={(e) => setUpperTolerance(e.target.value)} />
+                                            </div>
+                                            <div className="w-1/2">
+                                                <span className="text-[10px] text-gray-500">Min Tol.</span>
+                                                <input type="number" step="any" className="w-full mt-0.5 bg-gray-50 border border-gray-200 rounded p-1.5 text-sm focus:ring-blue-500 focus:border-blue-500" placeholder="Auto" value={lowerTolerance} onChange={(e) => setLowerTolerance(e.target.value)} />
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="pt-3 border-t border-gray-100">
+                                        <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1"><MaximizeIcon /> Netzdiagramm</label>
+                                        <div className="flex gap-2">
+                                            <div className="w-1/2">
+                                                <span className="text-[10px] text-gray-500">Max Wert</span>
+                                                <input type="number" step="any" className="w-full mt-0.5 bg-gray-50 border border-gray-200 rounded p-1.5 text-sm focus:ring-blue-500 focus:border-blue-500" placeholder="Auto" value={radarManualMax} onChange={(e) => setRadarManualMax(e.target.value)} />
+                                            </div>
+                                            <div className="w-1/2">
+                                                <span className="text-[10px] text-gray-500">Min Wert</span>
+                                                <input type="number" step="any" className="w-full mt-0.5 bg-gray-50 border border-gray-200 rounded p-1.5 text-sm focus:ring-blue-500 focus:border-blue-500" placeholder="Auto" value={radarManualMin} onChange={(e) => setRadarManualMin(e.target.value)} />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* 4. Sichtbare Kurven Toggle Gruppen */}
+                                <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 lg:col-span-2">
+                                    <label className="block text-sm font-medium text-gray-700 mb-3 flex items-center justify-between">
+                                        <span>Sichtbare Messreihen</span>
+                                        <span className="text-[10px] text-gray-400 font-normal border border-gray-200 rounded px-1.5 py-0.5 bg-gray-50">Standard: Werte &gt; 0</span>
+                                    </label>
+                                    <div className="flex flex-col gap-3">
+                                        <div className="flex flex-wrap gap-2">
+                                            <ToggleBtn active={visibleLines.m1} color="bg-blue-500" onClick={() => toggleLine('m1')} label="D_M1" />
+                                            <ToggleBtn active={visibleLines.m2} color="bg-green-500" onClick={() => toggleLine('m2')} label="D_M2" />
+                                            <ToggleBtn active={visibleLines.m3} color="bg-amber-500" onClick={() => toggleLine('m3')} label="D_M3" />
+                                            <ToggleBtn active={visibleLines.dRoh} color="bg-indigo-500" onClick={() => toggleLine('dRoh')} label="D_Roh" />
+                                        </div>
+                                        <div className="flex flex-wrap gap-2 border-t border-gray-100 pt-2">
+                                            <ToggleBtn active={visibleLines.e1} color="bg-purple-500" onClick={() => toggleLine('e1')} label="Eb M1" />
+                                            <ToggleBtn active={visibleLines.e2} color="bg-pink-500" onClick={() => toggleLine('e2')} label="Eb M2" />
+                                            <ToggleBtn active={visibleLines.e3} color="bg-cyan-500" onClick={() => toggleLine('e3')} label="Eb M3" />
+                                        </div>
+                                        <div className="flex flex-wrap gap-2 border-t border-gray-100 pt-2">
+                                            <ToggleBtn active={visibleLines.n1} color="bg-red-500" onClick={() => toggleLine('n1')} label="Nocke M1" />
+                                            <ToggleBtn active={visibleLines.n2} color="bg-orange-500" onClick={() => toggleLine('n2')} label="Nocke M2" />
+                                            <ToggleBtn active={visibleLines.n3} color="bg-yellow-500" onClick={() => toggleLine('n3')} label="Nocke M3" />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+                                <StatCard title="D_M1" stat={stats?.m1} visible={visibleLines.m1} color="border-blue-200 bg-blue-50" unit="mm" />
+                                <StatCard title="D_M2" stat={stats?.m2} visible={visibleLines.m2} color="border-green-200 bg-green-50" unit="mm" />
+                                <StatCard title="D_M3" stat={stats?.m3} visible={visibleLines.m3} color="border-amber-200 bg-amber-50" unit="mm" />
+                                <StatCard title="D_Rohdaten" stat={stats?.dRoh} visible={visibleLines.dRoh} color="border-indigo-200 bg-indigo-50" unit="mm" />
+                                
+                                <StatCard title="Ebenheit M1" stat={stats?.e1} visible={visibleLines.e1} color="border-purple-200 bg-purple-50" unit="mm" />
+                                <StatCard title="Ebenheit M2" stat={stats?.e2} visible={visibleLines.e2} color="border-pink-200 bg-pink-50" unit="mm" />
+                                <StatCard title="Ebenheit M3" stat={stats?.e3} visible={visibleLines.e3} color="border-cyan-200 bg-cyan-50" unit="mm" />
+                            </div>
+
+                            {/* ---- DIAGRAMM BEREICH ---- */}
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                
+                                {/* 1. Netzdiagramm (nur für Durchmesser) */}
+                                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 h-[700px] flex flex-col">
+                                    <h3 className="text-lg font-semibold mb-4 text-center text-gray-800">Durchmesser & Toleranzen (Netzdiagramm)</h3>
+                                    {chartData.length === 0 ? (
+                                        <div className="w-full h-full flex items-center justify-center text-gray-400">Keine Daten vorhanden.</div>
+                                    ) : (
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <RadarChart cx="50%" cy="50%" outerRadius="80%" data={chartData} margin={{ top: 10, right: 30, left: 30, bottom: 20 }}>
+                                                {/* gridType="circle" zwingt das Netzdiagramm in perfekte Kreise anstatt Polygone! */}
+                                                <PolarGrid strokeDasharray="3 3" opacity={0.4} gridType="circle" radialLines={false} />
+                                                <PolarAngleAxis 
+                                                    dataKey="winkel" 
+                                                    tickLine={false}
+                                                    tickFormatter={(val) => (Math.round(val) % 30 === 0 ? `${Math.round(val)}°` : '')} 
+                                                    tick={{ fill: '#6b7280', fontSize: 11 }}
+                                                />
+                                                <PolarRadiusAxis 
+                                                    angle={45} 
+                                                    domain={radarAxisDomain} 
+                                                    tickCount={6}
+                                                    tick={{ fill: '#1e293b', fontSize: 12, fontWeight: 'bold' }}
+                                                    tickFormatter={(val) => val.toFixed(2)} 
+                                                />
+                                                
+                                                <Tooltip labelFormatter={(val) => `Winkel: ${val}°`} formatter={tooltipFormatter} />
+                                                <Legend verticalAlign="top" height={36} formatter={(value) => {
+                                                    if(value === 'upperTol') return 'Max Tol.';
+                                                    if(value === 'lowerTol') return 'Min Tol.';
+                                                    return value.replace('C', ' (Vgl.)');
+                                                }} />
+                                                
+                                                {/* Toleranzen als perfekte Kreise durch 360 gefüllte Punkte */}
+                                                {upperTolerance !== '' && !isNaN(parseFloat(upperTolerance)) && <Radar dataKey="upperTol" name="Max Tol." stroke="#ef4444" fill="#ef4444" fillOpacity={0} strokeWidth={2} strokeDasharray="5 5" isAnimationActive={false} />}
+                                                {lowerTolerance !== '' && !isNaN(parseFloat(lowerTolerance)) && <Radar dataKey="lowerTol" name="Min Tol." stroke="#ef4444" fill="#ef4444" fillOpacity={0} strokeWidth={2} strokeDasharray="5 5" isAnimationActive={false} />}
+                                                
+                                                {/* HAUPTBAUTEIL Durchmesser */}
+                                                {visibleLines.m1 && <Radar dataKey="m1" name="D_M1" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.1} />}
+                                                {visibleLines.m2 && <Radar dataKey="m2" name="D_M2" stroke="#22c55e" fill="#22c55e" fillOpacity={0.1} />}
+                                                {visibleLines.m3 && <Radar dataKey="m3" name="D_M3" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.1} />}
+                                                {visibleLines.dRoh && <Radar dataKey="dRoh" name="D_Rohdaten" stroke="#6366f1" fill="#6366f1" fillOpacity={0.1} />}
+                                                
+                                                {/* VERGLEICHSBAUTEIL Durchmesser */}
+                                                {compareComponentKey && visibleLines.m1 && <Radar dataKey="m1C" name="D_M1C" stroke="#3b82f6" fill="none" strokeWidth={2} strokeDasharray="3 3" />}
+                                                {compareComponentKey && visibleLines.m2 && <Radar dataKey="m2C" name="D_M2C" stroke="#22c55e" fill="none" strokeWidth={2} strokeDasharray="3 3" />}
+                                                {compareComponentKey && visibleLines.m3 && <Radar dataKey="m3C" name="D_M3C" stroke="#f59e0b" fill="none" strokeWidth={2} strokeDasharray="3 3" />}
+                                                {compareComponentKey && visibleLines.dRoh && <Radar dataKey="dRohC" name="D_RohdatenC" stroke="#6366f1" fill="none" strokeWidth={2} strokeDasharray="3 3" />}
+                                            </RadarChart>
+                                        </ResponsiveContainer>
+                                    )}
+                                </div>
+
+                                {/* 2. Liniendiagramm (für Ebenheit und Nocken) */}
+                                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 h-[700px] flex flex-col">
+                                    <h3 className="text-lg font-semibold mb-4 text-center text-gray-800">Ebenheit & Nocken (Liniendiagramm)</h3>
+                                    {chartData.length === 0 ? (
+                                        <div className="w-full h-full flex items-center justify-center text-gray-400">Keine Daten vorhanden.</div>
+                                    ) : (
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <LineChart data={chartData} margin={{ top: 10, right: 30, left: 20, bottom: 20 }}>
+                                                <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.4} />
+                                                <XAxis dataKey="winkel" type="number" domain={[0, 360]} tickCount={13} />
+                                                
+                                                {/* Linke Achse für Ebenheit */}
+                                                <YAxis yAxisId="left" domain={['auto', 'auto']} tickFormatter={(val) => val.toFixed(2)} />
+                                                {/* Unsichtbare rechte Achse speziell für digitale Nocken-Signale (0 und 1) */}
+                                                <YAxis yAxisId="nocke" orientation="right" domain={[0, 1.2]} hide={true} />
+                                                
+                                                <Tooltip labelFormatter={(val) => `Winkel: ${val}°`} formatter={tooltipFormatter} />
+                                                <Legend verticalAlign="top" height={36} formatter={(value) => value.replace('C', ' (Vgl.)')} />
+                                                
+                                                {/* HAUPTBAUTEIL Ebenheit */}
+                                                {visibleLines.e1 && <Line yAxisId="left" type="monotone" dataKey="e1" name="Ebenheit M1" stroke="#a855f7" strokeWidth={2} dot={false} connectNulls />}
+                                                {visibleLines.e2 && <Line yAxisId="left" type="monotone" dataKey="e2" name="Ebenheit M2" stroke="#ec4899" strokeWidth={2} dot={false} connectNulls />}
+                                                {visibleLines.e3 && <Line yAxisId="left" type="monotone" dataKey="e3" name="Ebenheit M3" stroke="#06b6d4" strokeWidth={2} dot={false} connectNulls />}
+                                                
+                                                {/* HAUPTBAUTEIL Nocken (digitales Signal via 'step') */}
+                                                {visibleLines.n1 && <Line yAxisId="nocke" type="step" dataKey="n1" name="Nocke M1" stroke="#ef4444" strokeWidth={1.5} dot={false} connectNulls />}
+                                                {visibleLines.n2 && <Line yAxisId="nocke" type="step" dataKey="n2" name="Nocke M2" stroke="#f97316" strokeWidth={1.5} dot={false} connectNulls />}
+                                                {visibleLines.n3 && <Line yAxisId="nocke" type="step" dataKey="n3" name="Nocke M3" stroke="#eab308" strokeWidth={1.5} dot={false} connectNulls />}
+
+                                                {/* VERGLEICHSBAUTEIL Ebenheit (Gestrichelt) */}
+                                                {compareComponentKey && visibleLines.e1 && <Line yAxisId="left" type="monotone" dataKey="e1C" name="Ebenheit M1C" stroke="#a855f7" strokeWidth={2} strokeDasharray="3 3" dot={false} connectNulls />}
+                                                {compareComponentKey && visibleLines.e2 && <Line yAxisId="left" type="monotone" dataKey="e2C" name="Ebenheit M2C" stroke="#ec4899" strokeWidth={2} strokeDasharray="3 3" dot={false} connectNulls />}
+                                                {compareComponentKey && visibleLines.e3 && <Line yAxisId="left" type="monotone" dataKey="e3C" name="Ebenheit M3C" stroke="#06b6d4" strokeWidth={2} strokeDasharray="3 3" dot={false} connectNulls />}
+                                                
+                                                {/* VERGLEICHSBAUTEIL Nocken (Gestrichelt) */}
+                                                {compareComponentKey && visibleLines.n1 && <Line yAxisId="nocke" type="step" dataKey="n1C" name="Nocke M1C" stroke="#ef4444" strokeWidth={1.5} strokeDasharray="3 3" dot={false} connectNulls />}
+                                                {compareComponentKey && visibleLines.n2 && <Line yAxisId="nocke" type="step" dataKey="n2C" name="Nocke M2C" stroke="#f97316" strokeWidth={1.5} strokeDasharray="3 3" dot={false} connectNulls />}
+                                                {compareComponentKey && visibleLines.n3 && <Line yAxisId="nocke" type="step" dataKey="n3C" name="Nocke M3C" stroke="#eab308" strokeWidth={1.5} strokeDasharray="3 3" dot={false} connectNulls />}
+                                            </LineChart>
+                                        </ResponsiveContainer>
+                                    )}
+                                </div>
+                                
+                            </div>
+                        </div>
+                    )}
+                </div>
+                </div>
+            );
+        };
+
+        const ToggleBtn = ({ active, color, onClick, label }) => (
+            <button onClick={onClick} className={`px-2.5 py-1 rounded-full text-xs font-medium transition-all flex items-center gap-2 border ${active ? `bg-white ${color.replace('bg-', 'border-').replace('500', '200')} shadow-sm text-gray-800` : 'bg-gray-50 text-gray-400 opacity-60'}`}>
+                <div className={`w-2 h-2 rounded-full ${active ? color : 'bg-gray-300'}`}></div>{label}
+            </button>
+        );
+
+        const StatCard = ({ title, stat, visible, color, unit }) => {
+            if (!visible || !stat) return null;
+            return (
+                <div className={`p-3 rounded-xl border ${color} bg-opacity-50 flex flex-col justify-between h-full`}>
+                    <div>
+                        <h4 className="text-[10px] font-semibold text-gray-500 uppercase mb-1">{title}</h4>
+                        <p className="text-xl font-bold text-gray-900 leading-none mb-1">{stat.delta.toFixed(3)}</p>
+                        <p className="text-[9px] text-gray-500 uppercase">Schwankung</p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-1 text-[9px] text-gray-600 bg-white bg-opacity-60 p-1.5 rounded mt-3">
+                        <div>Min:<br/><span className="font-medium text-xs">{stat.min.toFixed(3)}</span></div>
+                        <div>Max:<br/><span className="font-medium text-xs">{stat.max.toFixed(3)}</span></div>
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
